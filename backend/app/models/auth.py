@@ -1,22 +1,55 @@
+"""Authentication, authorization, and canonical user SQLAlchemy models."""
+
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
+from app.core.enums import UserStatus
 from app.db.base import Base
+from app.db.base_model import BaseModel
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class User(BaseModel):
+    """Represent the canonical authenticated ApexFlow user account."""
+
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    corporate_email: Mapped[str] = synonym("email")
+    personal_email: Mapped[str | None] = mapped_column(String(320), unique=True, index=True)
+    employee_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
+    google_workspace_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(100))
+    middle_name: Mapped[str | None] = mapped_column(String(100))
+    last_name: Mapped[str | None] = mapped_column(String(100))
     full_name: Mapped[str] = mapped_column(String(255))
+    mobile_number: Mapped[str | None] = mapped_column(String(32))
     avatar_url: Mapped[str | None] = mapped_column(String(2048))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    failed_login_attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    status: Mapped[UserStatus] = mapped_column(
+        SqlEnum(UserStatus, name="user_status", native_enum=False, length=20),
+        default=UserStatus.ACTIVE,
+        nullable=False,
+    )
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    role_assignments: Mapped[list["UserRole"]] = relationship(
+        "UserRole",
+        foreign_keys="UserRole.user_id",
+    )
+    sessions: Mapped[list["Session"]] = relationship(
+        "Session",
+        foreign_keys="Session.user_id",
+    )
+    passwordless_tokens: Mapped[list["PasswordlessToken"]] = relationship(
+        "PasswordlessToken",
+        foreign_keys="PasswordlessToken.user_id",
+    )
 
 
 class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
